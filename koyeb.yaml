@@ -1,0 +1,21 @@
+services:
+  - name: web
+    instance_type: nano
+    git:
+      branch: main
+    ports:
+      - port: 5000
+        protocol: http
+    envs:
+      - key: PORT
+        value: "5000"
+    command: python wsgi.py
+    routes:
+      - path: /
+        public: true
+
+  - name: bot
+    instance_type: nano
+    git:
+      branch: main
+    command: python bot_runner.py 
