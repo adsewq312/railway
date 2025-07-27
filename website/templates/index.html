@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz Web - Главная{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 text-center">
+        <h1 class="display-4 mb-4">Добро пожаловать в Quiz Web</h1>
+        <p class="lead mb-4">
+            Система для проведения интерактивных викторин с интеграцией Telegram
+        </p>
+        {% if current_user.is_authenticated %}
+            {% if current_user.role in ['admin', 'moderator'] %}
+            <a href="{{ url_for('admin.index') }}" class="btn btn-primary btn-lg">
+                Перейти в админ-панель
+            </a>
+            {% else %}
+            <div class="alert alert-info">
+                Для участия в викторине используйте Telegram-бота
+            </div>
+            {% endif %}
+        {% else %}
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Вход для администраторов и модераторов</h5>
+                        <p class="card-text">
+                            Используйте команду /login в Telegram-боте для получения кода доступа
+                        </p>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-primary">
+                            Войти в систему
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

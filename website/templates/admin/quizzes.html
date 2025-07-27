@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление квизами | Quiz System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('admin.index') }}">Quiz System</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('admin.quizzes') }}">
+                            <i class="bi bi-question-circle"></i> Квизы
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin.games') }}">
+                            <i class="bi bi-play-circle"></i> Игры
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin.teams') }}">
+                            <i class="bi bi-people"></i> Команды
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <span class="nav-link">
+                            <i class="bi bi-person"></i> {{ current_user.username }}
+                        </span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.logout') }}">
+                            <i class="bi bi-box-arrow-right"></i> Выход
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Управление квизами</h2>
+            <div>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadQuizModal">
+                    <i class="bi bi-upload"></i> Загрузить квиз
+                </button>
+                <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createQuizModal">
+                    Создать квиз
+                </button>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createQuizFromTextModal">
+                    Создать квиз из текста
+                </button>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Раунды</th>
+                        <th>Вопросы</th>
+                        <th>Создан</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for quiz in quizzes %}
+                    <tr>
+                        <td>{{ quiz.id }}</td>
+                        <td>{{ quiz.title }}</td>
+                        <td>{{ quiz.rounds|length }}</td>
+                        <td>
+                            {% set question_count = namespace(total=0) %}
+                            {% for round in quiz.rounds %}
+                                {% set question_count.total = question_count.total + round.questions|length %}
+                            {% endfor %}
+                            {{ question_count.total }}
+                        </td>
+                        <td>{{ quiz.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td>
+                            <a href="{{ url_for('admin.edit_quiz', quiz_id=quiz.id) }}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-danger" 
+                                    onclick="deleteQuiz({{ quiz.id }})">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Модальное окно загрузки квиза -->
+    <div class="modal fade" id="uploadQuizModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Загрузить квиз</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="{{ url_for('admin.upload_quiz') }}" method="POST" enctype="multipart/form-data">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="quizTitle" class="form-label">Название квиза</label>
+                            <input type="text" class="form-control" id="quizTitle" name="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="quizFile" class="form-label">Файл квиза (.docx, .xlsx, .txt)</label>
+                            <input type="file" class="form-control" id="quizFile" name="file" 
+                                   accept=".docx,.xlsx,.txt" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Загрузить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания квиза -->
+    <div class="modal fade" id="createQuizModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Создать квиз</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="{{ url_for('admin.create_quiz') }}" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="newQuizTitle" class="form-label">Название квиза</label>
+                            <input type="text" class="form-control" id="newQuizTitle" name="title" required>
+                        </div>
+                        <div id="roundsContainer">
+                            <!-- Здесь будут динамически добавляться раунды -->
+                            <div class="round-block mb-4">
+                                <h5>Раунд 1</h5>
+                                <div class="mb-3">
+                                    <label class="form-label">Название раунда</label>
+                                    <input type="text" class="form-control" name="rounds[0][title]" required>
+                                </div>
+                                <div class="questions-container">
+                                    <div class="question-block mb-3">
+                                        <label class="form-label">Вопрос 1</label>
+                                        <select class="form-select mb-2" name="rounds[0][questions][0][type]" 
+                                                onchange="toggleQuestionType(this)">
+                                            <option value="open">Ручной ввод</option>
+                                            <option value="multiple_choice">Выбор варианта</option>
+                                        </select>
+                                        <input type="text" class="form-control mb-2" 
+                                               name="rounds[0][questions][0][text]" 
+                                               placeholder="Текст вопроса" required>
+                                        <div class="answer-block">
+                                            <input type="text" class="form-control" 
+                                                   name="rounds[0][questions][0][answer]" 
+                                                   placeholder="Правильный ответ" required>
+                                        </div>
+                                        <div class="options-block" style="display: none;">
+                                            <div class="options-list mb-2">
+                                                <div class="option-item mb-2">
+                                                    <div class="input-group">
+                                                        <div class="input-group-text">
+                                                            <input type="radio" 
+                                                                   class="form-check-input"
+                                                                   name="rounds[0][questions][0][correct_option]" 
+                                                                   id="option00"
+                                                                   value="0"
+                                                                   aria-label="Выбрать как правильный ответ">
+                                                        </div>
+                                                        <input type="text" class="form-control" 
+                                                               name="rounds[0][questions][0][options][]" 
+                                                               placeholder="Вариант ответа"
+                                                               aria-label="Текст варианта ответа">
+                                                        <button type="button" class="btn btn-danger" onclick="removeOption(this)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-info" 
+                                                    onclick="addOption(this)">
+                                                Добавить вариант
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-info" 
+                                        onclick="addQuestion(this, 0)">
+                                    Добавить вопрос
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-info mb-4" onclick="addRound()">
+                            Добавить раунд
+                        </button>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-success">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания квиза из текста -->
+    <div class="modal fade" id="createQuizFromTextModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Создать квиз из текста</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="{{ url_for('admin.create_quiz_from_text') }}" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="quizText" class="form-label">Текст квиза</label>
+                            <textarea class="form-control" id="quizText" name="quiz_text" rows="15" required
+                                    placeholder="# Название квиза
+Описание квиза
+
+## Раунд 1
+1. Вопрос
+Тип: multiple_choice
+Ответ: Правильный ответ
+Варианты: Вариант 1;Вариант 2;Правильный ответ;Вариант 3
+Баллы: 1
+Время: 30"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-success">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let roundCount = 1;
+        
+        function addRound() {
+            const roundsContainer = document.getElementById('roundsContainer');
+            const roundBlock = document.createElement('div');
+            roundBlock.className = 'round-block mb-4';
+            roundBlock.innerHTML = `
+                <h5>Раунд ${roundCount + 1}</h5>
+                <div class="mb-3">
+                    <label class="form-label">Название раунда</label>
+                    <input type="text" class="form-control" name="rounds[${roundCount}][title]" required>
+                </div>
+                <div class="questions-container">
+                    <div class="question-block mb-3">
+                        <label class="form-label">Вопрос 1</label>
+                        <select class="form-select mb-2" name="rounds[${roundCount}][questions][0][type]" 
+                                onchange="toggleQuestionType(this)">
+                            <option value="open">Ручной ввод</option>
+                            <option value="multiple_choice">Выбор варианта</option>
+                        </select>
+                        <input type="text" class="form-control mb-2" 
+                               name="rounds[${roundCount}][questions][0][text]" 
+                               placeholder="Текст вопроса" required>
+                        <div class="answer-block">
+                            <input type="text" class="form-control" 
+                                   name="rounds[${roundCount}][questions][0][answer]" 
+                                   placeholder="Правильный ответ" required>
+                        </div>
+                        <div class="options-block" style="display: none;">
+                            <div class="options-list mb-2">
+                                <div class="option-item mb-2">
+                                    <div class="input-group">
+                                        <div class="input-group-text">
+                                            <input type="radio" 
+                                                   class="form-check-input"
+                                                   name="rounds[${roundCount}][questions][0][correct_option]" 
+                                                   id="option${roundCount}0"
+                                                   value="0"
+                                                   aria-label="Выбрать как правильный ответ">
+                                        </div>
+                                        <input type="text" class="form-control" 
+                                               name="rounds[${roundCount}][questions][0][options][]" 
+                                               placeholder="Вариант ответа"
+                                               aria-label="Текст варианта ответа">
+                                        <button type="button" class="btn btn-danger" onclick="removeOption(this)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-info" 
+                                    onclick="addOption(this)">
+                                Добавить вариант
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-info" 
+                        onclick="addQuestion(this, ${roundCount})">
+                    Добавить вопрос
+                </button>
+            `;
+            roundsContainer.appendChild(roundBlock);
+            roundCount++;
+        }
+
+        function addQuestion(button, roundIndex) {
+            const questionsContainer = button.previousElementSibling;
+            const questionCount = questionsContainer.children.length;
+            const questionBlock = document.createElement('div');
+            questionBlock.className = 'question-block mb-3';
+            questionBlock.innerHTML = `
+                <label class="form-label">Вопрос ${questionCount + 1}</label>
+                <select class="form-select mb-2" name="rounds[${roundIndex}][questions][${questionCount}][type]" 
+                        onchange="toggleQuestionType(this)">
+                    <option value="open">Ручной ввод</option>
+                    <option value="multiple_choice">Выбор варианта</option>
+                </select>
+                <input type="text" class="form-control mb-2" 
+                       name="rounds[${roundIndex}][questions][${questionCount}][text]" 
+                       placeholder="Текст вопроса" required>
+                <div class="answer-block">
+                    <input type="text" class="form-control" 
+                           name="rounds[${roundIndex}][questions][${questionCount}][answer]" 
+                           placeholder="Правильный ответ" required>
+                </div>
+                <div class="options-block" style="display: none;">
+                    <div class="options-list mb-2">
+                        <div class="option-item mb-2">
+                            <div class="input-group">
+                                <div class="input-group-text">
+                                    <input type="radio" 
+                                           class="form-check-input"
+                                           name="rounds[${roundIndex}][questions][${questionCount}][correct_option]" 
+                                           id="option${roundIndex}${questionCount}"
+                                           value="0"
+                                           aria-label="Выбрать как правильный ответ">
+                                </div>
+                                <input type="text" class="form-control" 
+                                       name="rounds[${roundIndex}][questions][${questionCount}][options][]" 
+                                       placeholder="Вариант ответа"
+                                       aria-label="Текст варианта ответа">
+                                <button type="button" class="btn btn-danger" 
+                                        onclick="removeOption(this)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-info" 
+                            onclick="addOption(this)">
+                        Добавить вариант
+                    </button>
+                </div>
+            `;
+            questionsContainer.appendChild(questionBlock);
+        }
+
+        function toggleQuestionType(select) {
+            const questionBlock = select.closest('.question-block');
+            const answerBlock = questionBlock.querySelector('.answer-block');
+            const optionsBlock = questionBlock.querySelector('.options-block');
+            
+            if (select.value === 'multiple_choice') {
+                answerBlock.style.display = 'none';
+                optionsBlock.style.display = 'block';
+                answerBlock.querySelector('input').required = false;
+                optionsBlock.querySelector('input[type="radio"]').required = true;
+            } else {
+                answerBlock.style.display = 'block';
+                optionsBlock.style.display = 'none';
+                answerBlock.querySelector('input').required = true;
+                optionsBlock.querySelector('input[type="radio"]').required = false;
+            }
+        }
+
+        function addOption(button) {
+            const optionsList = button.previousElementSibling;
+            const optionCount = optionsList.children.length;
+            const optionItem = document.createElement('div');
+            optionItem.className = 'option-item mb-2';
+            
+            // Получаем имя радио-кнопки из первого элемента
+            const radioName = optionsList.querySelector('input[type="radio"]').name;
+            
+            optionItem.innerHTML = `
+                <div class="input-group">
+                    <div class="input-group-text">
+                        <input type="radio" 
+                               class="form-check-input"
+                               name="${radioName}" 
+                               id="option${roundIndex}${optionCount}"
+                               value="${optionCount}"
+                               aria-label="Выбрать как правильный ответ">
+                    </div>
+                    <input type="text" class="form-control" 
+                           name="${radioName.replace('correct_option', 'options')}[]" 
+                           placeholder="Вариант ответа"
+                           aria-label="Текст варианта ответа">
+                    <button type="button" class="btn btn-danger" onclick="removeOption(this)">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `;
+            optionsList.appendChild(optionItem);
+        }
+
+        function removeOption(button) {
+            const optionItem = button.closest('.option-item');
+            const optionsList = optionItem.parentElement;
+            
+            // Не удаляем, если это последний вариант
+            if (optionsList.children.length > 1) {
+                optionItem.remove();
+                
+                // Обновляем значения радио-кнопок
+                const options = optionsList.querySelectorAll('.option-item');
+                options.forEach((option, index) => {
+                    option.querySelector('input[type="radio"]').value = index;
+                });
+            }
+        }
+
+        function deleteQuiz(quizId) {
+            if (confirm('Вы уверены, что хотите удалить этот квиз?')) {
+                fetch(`/admin/quizzes/${quizId}/delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }).then(response => {
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        alert('Ошибка при удалении квиза');
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html> 

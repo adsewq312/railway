@@ -1,0 +1,260 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Редактирование квиза{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h3>Редактирование квиза</h3>
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('admin.update_quiz', quiz_id=quiz.id) }}" method="POST">
+                <div class="mb-3">
+                    <label for="quizTitle" class="form-label">Название квиза</label>
+                    <input type="text" class="form-control" id="quizTitle" name="title" value="{{ quiz.title }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="quizDescription" class="form-label">Описание квиза</label>
+                    <textarea class="form-control" id="quizDescription" name="description" rows="3">{{ quiz.description }}</textarea>
+                </div>
+                <div id="roundsContainer">
+                    {% for round in quiz.rounds %}
+                    <div class="round-block mb-4" data-round-index="{{ loop.index0 }}">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5>Раунд {{ loop.index }}</h5>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="deleteRound(this)">
+                                <i class="bi bi-trash"></i> Удалить раунд
+                            </button>
+                        </div>
+                        <input type="hidden" name="rounds[{{ loop.index0 }}][id]" value="{{ round.id }}">
+                        <div class="mb-3">
+                            <label class="form-label">Название раунда</label>
+                            <input type="text" class="form-control" name="rounds[{{ loop.index0 }}][title]" value="{{ round.title }}" required>
+                        </div>
+                        <div class="questions-container">
+                            {% for question in round.questions %}
+                            {% set round_index = loop.parent.index0 %}
+                            <div class="question-block mb-3" data-question-index="{{ loop.index0 }}">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label">Вопрос {{ loop.index }}</label>
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteQuestion(this)">
+                                        <i class="bi bi-trash"></i> Удалить вопрос
+                                    </button>
+                                </div>
+                                <input type="hidden" name="rounds[{{ round_index }}][questions][{{ loop.index0 }}][id]" value="{{ question.id }}">
+                                <select class="form-select mb-2" 
+                                        name="rounds[{{ round_index }}][questions][{{ loop.index0 }}][type]" 
+                                        onchange="toggleQuestionType(this)">
+                                    <option value="open" {% if question.type == 'open' %}selected{% endif %}>Ручной ввод</option>
+                                    <option value="multiple_choice" {% if question.type == 'multiple_choice' %}selected{% endif %}>Выбор варианта</option>
+                                </select>
+                                <input type="text" class="form-control mb-2" 
+                                       name="rounds[{{ round_index }}][questions][{{ loop.index0 }}][text]" 
+                                       value="{{ question.text }}"
+                                       placeholder="Текст вопроса" required>
+                                <div class="answer-block">
+                                    <input type="text" class="form-control" 
+                                           name="rounds[{{ round_index }}][questions][{{ loop.index0 }}][answer]" 
+                                           value="{{ question.correct_answer }}"
+                                           placeholder="Правильный ответ" required>
+                                </div>
+                                <div class="options-block" {% if question.type != 'multiple_choice' %}style="display: none;"{% endif %}>
+                                    <div class="options-list mb-2">
+                                        {% if question.options %}
+                                            {% for option in question.options %}
+                                            {% set question_index = loop.parent.index0 %}
+                                            <div class="option-item mb-2">
+                                                <div class="input-group">
+                                                    <div class="input-group-text">
+                                                        <input type="radio" 
+                                                               class="form-check-input"
+                                                               name="rounds[{{ round_index }}][questions][{{ question_index }}][correct_option]" 
+                                                               value="{{ loop.index0 }}"
+                                                               {% if option == question.correct_answer %}checked{% endif %}
+                                                               required>
+                                                    </div>
+                                                    <input type="text" class="form-control" 
+                                                           name="rounds[{{ round_index }}][questions][{{ question_index }}][options][]" 
+                                                           value="{{ option }}"
+                                                           placeholder="Вариант ответа">
+                                                    <button type="button" class="btn btn-danger" onclick="removeOption(this)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <div class="option-item mb-2">
+                                                <div class="input-group">
+                                                    <div class="input-group-text">
+                                                        <input type="radio" 
+                                                               class="form-check-input"
+                                                               name="rounds[{{ round_index }}][questions][{{ loop.index0 }}][correct_option]" 
+                                                               value="0"
+                                                               required>
+                                                    </div>
+                                                    <input type="text" class="form-control" 
+                                                           name="rounds[{{ round_index }}][questions][{{ loop.index0 }}][options][]" 
+                                                           placeholder="Вариант ответа">
+                                                    <button type="button" class="btn btn-danger" onclick="removeOption(this)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-info" onclick="addOption(this)">
+                                        Добавить вариант
+                                    </button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-info" onclick="addQuestion(this, {{ loop.index0 }})">
+                            Добавить вопрос
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" class="btn btn-info mb-4" onclick="addRound()">
+                    Добавить раунд
+                </button>
+                <div class="text-end">
+                    <a href="{{ url_for('admin.quizzes') }}" class="btn btn-secondary">Отмена</a>
+                    <button type="submit" class="btn btn-success">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let roundCount = {{ quiz.rounds|length }};
+
+function addRound() {
+    const roundsContainer = document.getElementById('roundsContainer');
+    const roundBlock = document.createElement('div');
+    roundBlock.className = 'round-block mb-4';
+    roundBlock.dataset.roundIndex = roundCount;
+    roundBlock.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5>Раунд ${roundCount + 1}</h5>
+            <button type="button" class="btn btn-danger btn-sm" onclick="deleteRound(this)">
+                <i class="bi bi-trash"></i> Удалить раунд
+            </button>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Название раунда</label>
+            <input type="text" class="form-control" name="rounds[${roundCount}][title]" required>
+        </div>
+        <div class="questions-container"></div>
+        <button type="button" class="btn btn-sm btn-info" onclick="addQuestion(this, ${roundCount})">
+            Добавить вопрос
+        </button>
+    `;
+    roundsContainer.appendChild(roundBlock);
+    roundCount++;
+}
+
+function addQuestion(button, roundIndex) {
+    const questionsContainer = button.previousElementSibling;
+    const questionCount = questionsContainer.children.length;
+    const questionBlock = document.createElement('div');
+    questionBlock.className = 'question-block mb-3';
+    questionBlock.dataset.questionIndex = questionCount;
+    questionBlock.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label">Вопрос ${questionCount + 1}</label>
+            <button type="button" class="btn btn-danger btn-sm" onclick="deleteQuestion(this)">
+                <i class="bi bi-trash"></i> Удалить вопрос
+            </button>
+        </div>
+        <select class="form-select mb-2" 
+                name="rounds[${roundIndex}][questions][${questionCount}][type]" 
+                onchange="toggleQuestionType(this)">
+            <option value="open">Ручной ввод</option>
+            <option value="multiple_choice">Выбор варианта</option>
+        </select>
+        <input type="text" class="form-control mb-2" 
+               name="rounds[${roundIndex}][questions][${questionCount}][text]" 
+               placeholder="Текст вопроса" required>
+        <div class="answer-block">
+            <input type="text" class="form-control" 
+                   name="rounds[${roundIndex}][questions][${questionCount}][answer]" 
+                   placeholder="Правильный ответ" required>
+        </div>
+        <div class="options-block" style="display: none;">
+            <div class="options-list mb-2">
+                <div class="option-item mb-2">
+                    <div class="input-group">
+                        <div class="input-group-text">
+                            <input type="radio" 
+                                   class="form-check-input"
+                                   name="rounds[${roundIndex}][questions][${questionCount}][correct_option]" 
+                                   value="0"
+                                   required>
+                        </div>
+                        <input type="text" class="form-control" 
+                               name="rounds[${roundIndex}][questions][${questionCount}][options][]" 
+                               placeholder="Вариант ответа">
+                        <button type="button" class="btn btn-danger" onclick="removeOption(this)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-info" onclick="addOption(this)">
+                Добавить вариант
+            </button>
+        </div>
+    `;
+    questionsContainer.appendChild(questionBlock);
+}
+
+function toggleQuestionType(select) {
+    const optionsBlock = select.parentElement.querySelector('.options-block');
+    optionsBlock.style.display = select.value === 'multiple_choice' ? 'block' : 'none';
+}
+
+function addOption(button) {
+    const optionsList = button.previousElementSibling;
+    const optionCount = optionsList.children.length;
+    const roundIndex = button.closest('.round-block').dataset.roundIndex;
+    const questionIndex = button.closest('.question-block').dataset.questionIndex;
+    
+    const optionItem = document.createElement('div');
+    optionItem.className = 'option-item mb-2';
+    optionItem.innerHTML = `
+        <div class="input-group">
+            <div class="input-group-text">
+                <input type="radio" 
+                       class="form-check-input"
+                       name="rounds[${roundIndex}][questions][${questionIndex}][correct_option]" 
+                       value="${optionCount}"
+                       required>
+            </div>
+            <input type="text" class="form-control" 
+                   name="rounds[${roundIndex}][questions][${questionIndex}][options][]" 
+                   placeholder="Вариант ответа">
+            <button type="button" class="btn btn-danger" onclick="removeOption(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    optionsList.appendChild(optionItem);
+}
+
+function removeOption(button) {
+    button.closest('.option-item').remove();
+}
+
+function deleteQuestion(button) {
+    button.closest('.question-block').remove();
+}
+
+function deleteRound(button) {
+    button.closest('.round-block').remove();
+}
+</script>
+{% endblock %} 

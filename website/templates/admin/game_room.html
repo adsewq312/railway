@@ -1,0 +1,563 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Игровая комната - {{ game.quiz.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-container {
+        height: 400px;
+        overflow-y: auto;
+    }
+    .chat-message {
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .chat-message.system {
+        background-color: #f8f9fa;
+    }
+    .chat-message.moderator {
+        background-color: #e3f2fd;
+    }
+    .scoreboard {
+        height: 300px;
+        overflow-y: auto;
+    }
+    .team-score {
+        cursor: pointer;
+    }
+    .current-question {
+        background-color: #fff3cd;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    .team-members {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    .member-item {
+        padding: 5px;
+        margin: 2px 0;
+        border-radius: 4px;
+        background-color: #f8f9fa;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .member-item.captain {
+        background-color: #e3f2fd;
+    }
+    .member-info {
+        font-size: 0.9em;
+        color: #666;
+    }
+    .member-status {
+        font-size: 0.8em;
+        padding: 2px 6px;
+        border-radius: 3px;
+        min-width: 80px;
+        text-align: center;
+    }
+    .member-status.online {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .member-status.offline {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .game-code {
+        font-family: monospace;
+        font-size: 1.2em;
+        padding: 5px 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+    }
+    .game-status {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #e9ecef;
+    }
+    .waiting-players {
+        margin-top: 5px;
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>{{ game.quiz.title }}</h2>
+                <div>
+                    {% if game.status == 'ready' %}
+                    <button type="button" class="btn btn-success" id="startGameBtn" disabled>
+                        <i class="fas fa-play"></i> Начать игру
+                    </button>
+                    {% elif game.status == 'active' %}
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-warning" id="pauseGameBtn">
+                            <i class="fas fa-pause"></i> Пауза
+                        </button>
+                        <button type="button" class="btn btn-primary" id="nextQuestionBtn">
+                            <i class="fas fa-forward"></i> Следующий вопрос
+                        </button>
+                    </div>
+                    {% elif game.status == 'paused' %}
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-success" id="resumeGameBtn">
+                            <i class="fas fa-play"></i> Продолжить
+                        </button>
+                        <button type="button" class="btn btn-danger" id="finishGameBtn">
+                            <i class="fas fa-stop"></i> Завершить
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-muted">
+                Код для присоединения к игре: <span class="game-code">{{ game.join_code }}</span>
+            </p>
+            {% if game.status == 'ready' %}
+            <div class="game-status">
+                <div>Статус: <strong>Ожидание игроков</strong></div>
+                <div class="waiting-players">
+                    <span id="connectedPlayers">0</span> из <span id="totalPlayers">{{ game.teams|map(attribute='members')|map('length')|sum }}</span> игроков подключились
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Левая колонка: чат и управление игрой -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Текущий вопрос</h5>
+                </div>
+                <div class="card-body">
+                    <div class="current-question" id="currentQuestion">
+                        {% if game.current_question %}
+                        <h5>Вопрос {{ game.current_question.order }}</h5>
+                        <p>{{ game.current_question.text }}</p>
+                        {% if game.current_question.type == 'multiple_choice' and game.current_question.options %}
+                        <div class="options">
+                            {% for option in game.current_question.options %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" disabled>
+                                <label class="form-check-label">{{ option }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-muted">Вопрос не выбран</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Чат игры</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chat-container mb-3" id="chatContainer">
+                        <!-- Сообщения будут добавляться здесь динамически -->
+                    </div>
+                    <form id="messageForm" class="mt-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="messageInput" placeholder="Введите сообщение...">
+                            <button class="btn btn-primary" type="submit">Отправить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Правая колонка: команды и результаты -->
+        <div class="col-md-4">
+            <!-- Команды и участники -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Команды и участники</h5>
+                </div>
+                <div class="card-body">
+                    {% for team in game.teams %}
+                    <div class="team-card mb-3">
+                        <h6 class="mb-2">{{ team.name }}</h6>
+                        <div class="team-members" id="team-{{ team.id }}-members">
+                            {% for member in team.members %}
+                            <div class="member-item {% if member.user.id == team.captain_id %}captain{% endif %}" id="member-{{ member.user.id }}">
+                                <div>
+                                    <div>{{ member.user.username }}</div>
+                                    <div class="member-info">
+                                        ID: {{ member.user.id }}
+                                        {% if member.user.id == team.captain_id %}
+                                        <span class="badge bg-primary">Капитан</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="member-status offline">Не в игре</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Таблица результатов -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Таблица результатов</h5>
+                </div>
+                <div class="card-body">
+                    <div class="scoreboard" id="scoreboard">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Команда</th>
+                                    <th>Очки</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for team in game.teams %}
+                                <tr>
+                                    <td>{{ team.name }}</td>
+                                    <td class="team-score" data-team-id="{{ team.id }}">
+                                        {{ team.total_score|default(0) }}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary edit-score" data-team-id="{{ team.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно изменения счета -->
+<div class="modal fade" id="scoreModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Изменить счет команды</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="scoreForm">
+                    <input type="hidden" id="teamId">
+                    <div class="mb-3">
+                        <label for="scoreInput" class="form-label">Новый счет</label>
+                        <input type="number" class="form-control" id="scoreInput" step="0.5" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="saveScore">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const socket = io();
+    const gameId = {{ game.id }};
+    const totalPlayers = {{ game.teams|map(attribute='members')|map('length')|sum }};
+    let connectedPlayers = 0;
+    const startGameBtn = document.getElementById('startGameBtn');
+    const chatContainer = document.getElementById('chatContainer');
+    const messageForm = document.getElementById('messageForm');
+    const messageInput = document.getElementById('messageInput');
+    const scoreModal = new bootstrap.Modal(document.getElementById('scoreModal'));
+    
+    // Функция для обработки ошибок запросов
+    async function handleResponse(response) {
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Произошла ошибка');
+        }
+        return data;
+    }
+
+    // Функция для отображения ошибок
+    function showError(error) {
+        alert(error.message || error);
+    }
+
+    // Управление игрой
+    if (startGameBtn) {
+        startGameBtn.addEventListener('click', async function() {
+            if (confirm('Вы уверены, что хотите начать игру?')) {
+                try {
+                    const data = await fetch(`/admin/games/${gameId}/start`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    }).then(handleResponse);
+                    
+                    if (data.success) {
+                        location.reload();
+                    }
+                } catch (error) {
+                    showError(error);
+                }
+            }
+        });
+    }
+
+    const pauseGameBtn = document.getElementById('pauseGameBtn');
+    if (pauseGameBtn) {
+        pauseGameBtn.addEventListener('click', async function() {
+            try {
+                const data = await fetch(`/admin/games/${gameId}/pause`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }).then(handleResponse);
+                
+                if (data.success) {
+                    location.reload();
+                }
+            } catch (error) {
+                showError(error);
+            }
+        });
+    }
+
+    const resumeGameBtn = document.getElementById('resumeGameBtn');
+    if (resumeGameBtn) {
+        resumeGameBtn.addEventListener('click', async function() {
+            try {
+                const data = await fetch(`/admin/games/${gameId}/resume`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }).then(handleResponse);
+                
+                if (data.success) {
+                    location.reload();
+                }
+            } catch (error) {
+                showError(error);
+            }
+        });
+    }
+
+    const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+    if (nextQuestionBtn) {
+        nextQuestionBtn.addEventListener('click', async function() {
+            try {
+                const data = await fetch(`/admin/games/${gameId}/next_question`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }).then(handleResponse);
+                
+                if (data.success) {
+                    updateCurrentQuestion(data.question);
+                }
+            } catch (error) {
+                showError(error);
+            }
+        });
+    }
+
+    // Изменение счета
+    document.querySelectorAll('.edit-score').forEach(button => {
+        button.addEventListener('click', function() {
+            const teamId = this.dataset.teamId;
+            const currentScore = document.querySelector(`.team-score[data-team-id="${teamId}"]`).textContent.trim();
+            document.getElementById('teamId').value = teamId;
+            document.getElementById('scoreInput').value = currentScore;
+            scoreModal.show();
+        });
+    });
+
+    document.getElementById('saveScore').addEventListener('click', function() {
+        const teamId = document.getElementById('teamId').value;
+        const score = document.getElementById('scoreInput').value;
+        
+        fetch(`/admin/games/${gameId}/scores`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                scores: {
+                    [teamId]: score
+                }
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                scoreModal.hide();
+            } else {
+                alert(data.error || 'Произошла ошибка');
+            }
+        });
+    });
+
+    // Вспомогательные функции
+    function addChatMessage(data) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${data.type}`;
+        messageDiv.innerHTML = `
+            <strong>${data.sender}:</strong>
+            <p>${data.message}</p>
+            <small class="text-muted">${new Date(data.timestamp).toLocaleTimeString()}</small>
+        `;
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function updateGameState(data) {
+        if (data.status !== '{{ game.status }}') {
+            location.reload();
+        }
+    }
+
+    function updateScoreboard(data) {
+        data.scores.forEach(score => {
+            const scoreCell = document.querySelector(`.team-score[data-team-id="${score.team_id}"]`);
+            if (scoreCell) {
+                scoreCell.textContent = score.total_score;
+            }
+        });
+    }
+
+    function updateCurrentQuestion(question) {
+        const questionDiv = document.getElementById('currentQuestion');
+        let html = `
+            <h5>Вопрос ${question.order}</h5>
+            <p>${question.text}</p>
+        `;
+        
+        if (question.type === 'multiple_choice' && question.options) {
+            html += '<div class="options">';
+            question.options.forEach(option => {
+                html += `
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" disabled>
+                        <label class="form-check-label">${option}</label>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        }
+        
+        questionDiv.innerHTML = html;
+    }
+
+    // Функция обновления статуса участника
+    function updateMemberStatus(userId, isOnline) {
+        const memberElement = document.getElementById(`member-${userId}`);
+        if (memberElement) {
+            const statusElement = memberElement.querySelector('.member-status');
+            if (statusElement) {
+                statusElement.textContent = isOnline ? 'В игре' : 'Не в игре';
+                statusElement.className = `member-status ${isOnline ? 'online' : 'offline'}`;
+                
+                // Обновляем счетчик подключенных игроков
+                if (isOnline) {
+                    connectedPlayers++;
+                } else {
+                    connectedPlayers--;
+                }
+                
+                // Обновляем отображение счетчика
+                const connectedPlayersElement = document.getElementById('connectedPlayers');
+                if (connectedPlayersElement) {
+                    connectedPlayersElement.textContent = connectedPlayers;
+                }
+                
+                // Активируем/деактивируем кнопку "Начать игру"
+                if (startGameBtn) {
+                    startGameBtn.disabled = connectedPlayers < totalPlayers;
+                }
+            }
+        }
+    }
+
+    // Подключение к сокетам
+    socket.emit('join_game_room', { game_id: gameId });
+
+    socket.on('chat_message', function(data) {
+        addChatMessage(data);
+    });
+
+    socket.on('error', function(data) {
+        showError(data);
+    });
+
+    socket.on('game_state', function(data) {
+        updateGameState(data);
+    });
+
+    socket.on('scoreboard_update', function(data) {
+        updateScoreboard(data);
+    });
+
+    // Обработка событий сокетов
+    socket.on('player_joined', function(data) {
+        updateMemberStatus(data.user_id, true);
+        // Добавляем сообщение в чат
+        addChatMessage({
+            type: 'system',
+            sender: 'Система',
+            message: `${data.username} присоединился к игре`,
+            timestamp: new Date()
+        });
+    });
+
+    socket.on('player_left', function(data) {
+        updateMemberStatus(data.user_id, false);
+        // Добавляем сообщение в чат
+        addChatMessage({
+            type: 'system',
+            sender: 'Система',
+            message: `${data.username} покинул игру`,
+            timestamp: new Date()
+        });
+    });
+
+    // Отправка сообщений
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const message = messageInput.value.trim();
+        if (message) {
+            socket.emit('send_message', {
+                game_id: gameId,
+                message: message
+            });
+            messageInput.value = '';
+        }
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Вход в систему{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-center">Вход в систему</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() if form }}
+                    <div class="mb-3">
+                        <label for="code" class="form-label">Код из Telegram бота</label>
+                        <input type="text" class="form-control" id="code" name="code" required>
+                        <div class="form-text">
+                            Используйте команду /login в Telegram боте, чтобы получить код для входа.
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Войти</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

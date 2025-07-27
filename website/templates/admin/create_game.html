@@ -1,0 +1,308 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Создание игры{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h3>Создание новой игры</h3>
+        </div>
+        <div class="card-body">
+            <!-- Шаг 1: Выбор квиза -->
+            <div class="step" id="step1">
+                <h4>Шаг 1: Выбор квиза</h4>
+                <div class="mb-3">
+                    <label for="quizSelect" class="form-label">Выберите квиз</label>
+                    <select class="form-select" id="quizSelect" required>
+                        <option value="">Выберите квиз...</option>
+                        {% for quiz in quizzes %}
+                        <option value="{{ quiz.id }}">{{ quiz.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="nextStep(1)">Далее</button>
+            </div>
+
+            <!-- Шаг 2: Формирование команд -->
+            <div class="step" id="step2" style="display: none;">
+                <h4>Шаг 2: Формирование команд</h4>
+                <div class="mb-3">
+                    <button type="button" class="btn btn-success mb-3" onclick="showAddTeamModal()">
+                        <i class="fas fa-plus"></i> Добавить команду
+                    </button>
+                    <div id="teamsList" class="list-group">
+                        <!-- Здесь будут отображаться команды -->
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(2)">Назад</button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep(2)">Далее</button>
+                </div>
+            </div>
+
+            <!-- Шаг 3: Подтверждение -->
+            <div class="step" id="step3" style="display: none;">
+                <h4>Шаг 3: Подтверждение</h4>
+                <div class="mb-3">
+                    <h5>Выбранный квиз: <span id="selectedQuizTitle"></span></h5>
+                    <h5>Количество команд: <span id="teamsCount">0</span></h5>
+                    <div class="alert alert-info">
+                        После создания игры вы будете перенаправлены в игровое лобби, где сможете управлять игрой.
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(3)">Назад</button>
+                    <button type="button" class="btn btn-success" onclick="createGame()">
+                        <span class="spinner-border spinner-border-sm" role="status" style="display: none;"></span>
+                        Создать игру
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления команды -->
+<div class="modal fade" id="addTeamModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить команду</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="teamName" class="form-label">Название команды</label>
+                    <input type="text" class="form-control" id="teamName" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Участники</label>
+                    <div id="teamMembers" class="list-group mb-2">
+                        <!-- Здесь будут отображаться участники -->
+                    </div>
+                    <div class="input-group">
+                        <input type="number" class="form-control" id="memberId" placeholder="Внутренний ID пользователя">
+                        <button type="button" class="btn btn-outline-primary" onclick="addMember()">Добавить</button>
+                    </div>
+                    <small class="form-text text-muted">
+                        Введите внутренний ID пользователя (не Telegram ID). 
+                        Капитана можно будет назначить позже в управлении командой.
+                    </small>
+                </div>
+                <div class="alert alert-danger" id="teamError" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveTeam()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing create game page...');
+    
+    // Глобальные переменные
+    window.currentTeams = [];
+    window.teamMembers = [];
+    window.addTeamModal = new bootstrap.Modal(document.getElementById('addTeamModal'));
+
+    // Привязываем функции к глобальному объекту window
+    window.nextStep = function(currentStep) {
+        console.log('Next step:', currentStep);
+        // Валидация перед переходом
+        if (currentStep === 1) {
+            const quizSelect = document.getElementById('quizSelect');
+            if (!quizSelect.value) {
+                showError('Пожалуйста, выберите квиз');
+                return;
+            }
+            // Сохраняем название выбранного квиза
+            const selectedQuiz = quizSelect.options[quizSelect.selectedIndex];
+            document.getElementById('selectedQuizTitle').textContent = selectedQuiz.text;
+        }
+        else if (currentStep === 2) {
+            if (currentTeams.length === 0) {
+                showError('Добавьте хотя бы одну команду');
+                return;
+            }
+        }
+
+        // Переход к следующему шагу
+        document.getElementById(`step${currentStep}`).style.display = 'none';
+        document.getElementById(`step${currentStep + 1}`).style.display = 'block';
+    };
+
+    window.prevStep = function(currentStep) {
+        document.getElementById(`step${currentStep}`).style.display = 'none';
+        document.getElementById(`step${currentStep - 1}`).style.display = 'block';
+    };
+
+    window.showAddTeamModal = function() {
+        // Очищаем форму
+        document.getElementById('teamName').value = '';
+        document.getElementById('teamError').style.display = 'none';
+        teamMembers = [];
+        updateTeamMembersList();
+        addTeamModal.show();
+    };
+
+    window.addMember = async function() {
+        const memberId = document.getElementById('memberId').value.trim();
+
+        if (!memberId) {
+            showError('Введите ID пользователя');
+            return;
+        }
+
+        if (teamMembers.some(m => m.id === memberId)) {
+            showError('Этот участник уже добавлен');
+            return;
+        }
+
+        try {
+            // Проверяем существование пользователя
+            const response = await fetch(`/admin/users/${memberId}/check`);
+            const data = await response.json();
+            
+            if (!data.exists) {
+                showError('Пользователь с таким ID не найден');
+                return;
+            }
+
+            teamMembers.push({
+                id: memberId,
+                username: data.username
+            });
+
+            // Очищаем поле
+            document.getElementById('memberId').value = '';
+            updateTeamMembersList();
+
+        } catch (error) {
+            console.error('Error:', error);
+            showError('Ошибка при проверке пользователя');
+        }
+    };
+
+    window.updateTeamMembersList = function() {
+        const container = document.getElementById('teamMembers');
+        container.innerHTML = teamMembers.map(member => `
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                ID: ${member.id} (${member.username})
+                <button type="button" class="btn btn-sm btn-danger" onclick="removeMember('${member.id}')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    };
+
+    window.removeMember = function(memberId) {
+        teamMembers = teamMembers.filter(m => m.id !== memberId);
+        updateTeamMembersList();
+    };
+
+    window.saveTeam = function() {
+        const teamName = document.getElementById('teamName').value.trim();
+        const teamError = document.getElementById('teamError');
+
+        teamError.style.display = 'none';
+
+        if (!teamName) {
+            teamError.textContent = 'Введите название команды';
+            teamError.style.display = 'block';
+            return;
+        }
+        if (teamMembers.length < 1) {
+            teamError.textContent = 'Добавьте хотя бы одного участника';
+            teamError.style.display = 'block';
+            return;
+        }
+
+        const team = {
+            name: teamName,
+            members: teamMembers
+        };
+
+        currentTeams.push(team);
+        updateTeamsList();
+        addTeamModal.hide();
+
+        // Обновляем счетчик команд
+        document.getElementById('teamsCount').textContent = currentTeams.length;
+    };
+
+    window.updateTeamsList = function() {
+        const container = document.getElementById('teamsList');
+        container.innerHTML = currentTeams.map((team, index) => `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-1">${team.name}</h5>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="removeTeam(${index})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <p class="mb-1">Участники: ${team.members.map(m => m.username).join(', ')}</p>
+            </div>
+        `).join('');
+    };
+
+    window.removeTeam = function(index) {
+        if (confirmAction('Вы уверены, что хотите удалить эту команду?')) {
+            currentTeams.splice(index, 1);
+            updateTeamsList();
+            document.getElementById('teamsCount').textContent = currentTeams.length;
+        }
+    };
+
+    window.createGame = function() {
+        const quizId = document.getElementById('quizSelect').value;
+        const createBtn = document.querySelector('#step3 .btn-success');
+        const spinner = createBtn.querySelector('.spinner-border');
+        
+        // Показываем спиннер и блокируем кнопку
+        createBtn.disabled = true;
+        spinner.style.display = 'inline-block';
+        
+        // Отправляем данные на сервер
+        fetch('/admin/games/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                quiz_id: quizId,
+                teams: currentTeams
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => Promise.reject(data));
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Перенаправляем в игровое лобби
+                window.location.href = data.redirect_url;
+            } else {
+                throw new Error(data.error || 'Произошла ошибка при создании игры');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.error || 'Произошла ошибка при создании игры');
+            // Восстанавливаем кнопку
+            createBtn.disabled = false;
+            spinner.style.display = 'none';
+        });
+    };
+
+    console.log('Create game page initialized');
+});
+</script>
+{% endblock %} 
