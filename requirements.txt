@@ -12,4 +12,4 @@ python-engineio==4.5.1
 python-socketio==5.8.0
 python-docx==0.8.11
 openpyxl==3.1.2
-gunicorn==21.2.0 
+pyngrok==7.1.5 
